@@ -1,35 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Avatar, Button, Card, Text, useTheme } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const theme = useTheme();
-  const router = useRouter();
-  const [userData, setUserData] = useState({ name: '', email: '' });
-
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      const userDataString = await AsyncStorage.getItem('userData');
-      if (userDataString) {
-        const parsedUserData = JSON.parse(userDataString);
-        setUserData(parsedUserData);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('userToken');
-      await AsyncStorage.removeItem('userData');
-      router.replace('/(auth)/login');
+      navigation.replace('Login');
     } catch (error) {
       console.error(error);
     }
@@ -39,8 +19,8 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Avatar.Icon size={80} icon="account" />
-        <Text style={styles.name}>{userData.name}</Text>
-        <Text style={styles.email}>{userData.email}</Text>
+        <Text style={styles.name}>John Does</Text>
+        <Text style={styles.email}>john.does@example.com</Text>
       </View>
 
       <Card style={styles.card}>

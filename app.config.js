@@ -40,7 +40,7 @@ export default {
       typedRoutes: true
     },
     extra: {
-      openaiApiKey: "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",
+      openaiApiKey: process.env.OPENAI_API_KEY,
     },
   }
 }; 

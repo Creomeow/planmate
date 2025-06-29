@@ -5,6 +5,7 @@ import {
     Alert,
     Dimensions,
     FlatList,
+    Image,
     Modal,
     ScrollView,
     StyleSheet,
@@ -15,22 +16,27 @@ import {
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import AIChatModal from '../../components/AIChatModal';
+import { Colors } from '../../constants/Colors';
 import { useAuth } from '../../context/auth';
+import { useTheme } from '../../context/theme';
 import { authService } from '../../services/authService';
 import { fetchEventbriteEvents } from '../../services/eventsService';
 
 const { width } = Dimensions.get('window');
 
-type ViewMode = 'card' | 'list' | 'map';
+type ViewMode = 'list' | 'map';
 
 export default function EventsScreen() {
   const { user, isLoading } = useAuth();
+  const { theme } = useTheme();
   
   console.log('Events screen - User:', user);
   console.log('Events screen - User ID:', user?.id);
   console.log('Events screen - Is loading:', isLoading);
   
-  const [viewMode, setViewMode] = useState<ViewMode>('card');
+  const colors = Colors[theme];
+  
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [events, setEvents] = useState<any[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<any[]>([]);
   const [bookmarkedEvents, setBookmarkedEvents] = useState<any[]>([]);
@@ -47,11 +53,20 @@ export default function EventsScreen() {
 
   useEffect(() => {
     fetchEvents();
+    // Clear any old global bookmarks data to ensure clean user-specific bookmarks
+    clearOldGlobalBookmarks();
   }, []);
 
   useEffect(() => {
-    loadBookmarkedEvents();
-  }, [user]);
+    if (user?.id && events.length > 0) {
+      console.log('Events: Loading bookmarks for user:', user.id);
+      loadBookmarkedEvents();
+    } else if (user?.id) {
+      console.log('Events: User logged in but events not loaded yet:', user.id);
+    } else {
+      console.log('Events: No user or user has no ID');
+    }
+  }, [user, events]);
 
   useEffect(() => {
     filterEvents();
@@ -73,34 +88,21 @@ export default function EventsScreen() {
   };
 
   const loadBookmarkedEvents = async () => {
-    if (!user?.id) {
+    if (!user?.id || events.length === 0) {
       return;
     }
     
     try {
-      // Try to load from auth service first
+      // Load user-specific bookmarks from auth service
       const savedEventIds = await authService.getBookmarkedEvents(user.id);
+      console.log('Loaded bookmarked event IDs:', savedEventIds);
       const savedEvents = events.filter(event => savedEventIds.includes(event.id));
+      console.log('Filtered bookmarked events:', savedEvents.length);
       setBookmarkedEvents(savedEvents);
-      
-      // Also keep local storage for backward compatibility
-      const localSaved = await AsyncStorage.getItem('bookmarkedEvents');
-      if (localSaved) {
-        const parsed = JSON.parse(localSaved);
-        setBookmarkedEvents(parsed);
-      }
     } catch (error) {
       console.error('Error loading bookmarked events:', error);
-      // Fallback to local storage
-      try {
-        const saved = await AsyncStorage.getItem('bookmarkedEvents');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setBookmarkedEvents(parsed);
-        }
-      } catch (localError) {
-        console.error('Error loading local bookmarked events:', localError);
-      }
+      // If auth service fails, just set empty array instead of falling back to global storage
+      setBookmarkedEvents([]);
     }
   };
 
@@ -108,6 +110,8 @@ export default function EventsScreen() {
     console.log('Bookmark attempt - User:', user);
     console.log('Bookmark attempt - User ID:', user?.id);
     console.log('Bookmark attempt - Is loading:', isLoading);
+    console.log('Bookmark attempt - Event:', event.title, 'ID:', event.id);
+    console.log('Current bookmarked events count:', bookmarkedEvents.length);
     
     if (isLoading) {
       console.log('Auth is loading, skipping bookmark');
@@ -129,18 +133,22 @@ export default function EventsScreen() {
     console.log('Bookmarking event:', event.title);
     
     try {
-      const newBookmarked = bookmarkedEvents.find(e => e.id === event.id)
+      const isCurrentlyBookmarked = bookmarkedEvents.some(e => e.id === event.id);
+      console.log('Is currently bookmarked:', isCurrentlyBookmarked);
+      
+      const newBookmarked = isCurrentlyBookmarked
         ? bookmarkedEvents.filter(e => e.id !== event.id)
         : [...bookmarkedEvents, event];
       
+      console.log('New bookmarked events count:', newBookmarked.length);
       setBookmarkedEvents(newBookmarked);
       
-      // Save to auth service
+      // Save to user-specific auth service only
       const eventIds = newBookmarked.map(e => e.id);
-      await authService.updateBookmarkedEvents(user.id, eventIds);
+      console.log('Saving event IDs to auth service:', eventIds);
+      const success = await authService.updateBookmarkedEvents(user.id, eventIds);
+      console.log('Auth service update success:', success);
       
-      // Also save to local storage for backward compatibility
-      await AsyncStorage.setItem('bookmarkedEvents', JSON.stringify(newBookmarked));
       console.log('Bookmark saved successfully');
     } catch (error) {
       console.error('Error toggling bookmark:', error);
@@ -185,25 +193,41 @@ export default function EventsScreen() {
     setSearchQuery('');
   };
 
+  const clearOldGlobalBookmarks = async () => {
+    try {
+      // Remove old global bookmarks storage to prevent conflicts
+      await AsyncStorage.removeItem('bookmarkedEvents');
+    } catch (error) {
+      console.log('No old global bookmarks to clear');
+    }
+  };
+
   const renderEventCard = ({ item }: { item: any }) => {
     const isBookmarked = bookmarkedEvents.some(e => e.id === item.id);
     
     return (
-      <View style={[styles.card, { borderLeftColor: item.color, borderLeftWidth: 4 }]}>
+      <View style={[styles.card, { 
+        backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white',
+        borderLeftColor: item.color, 
+        borderLeftWidth: 4 
+      }]}>
         <View style={styles.cardHeader}>
           <View style={styles.cardImage}>
-            <View style={[styles.imagePlaceholder, { backgroundColor: item.color }]}>
-              <Ionicons name="image" size={24} color="white" />
-            </View>
+            <Image
+              source={{ uri: item.image }}
+              style={styles.imagePlaceholder}
+              onError={(error) => console.log('Image loading error:', error.nativeEvent.error)}
+              onLoad={() => console.log('Image loaded successfully for:', item.title)}
+            />
           </View>
           <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardLocation}>
-              <Ionicons name="location" size={14} color="#666" />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+            <Text style={[styles.cardLocation, { color: colors.icon }]}>
+              <Ionicons name="location" size={14} color={colors.icon} />
               {' '}{item.location}
             </Text>
-            <Text style={styles.cardDate}>
-              <Ionicons name="calendar" size={14} color="#666" />
+            <Text style={[styles.cardDate, { color: colors.icon }]}>
+              <Ionicons name="calendar" size={14} color={colors.icon} />
               {' '}{item.date} at {item.time}
             </Text>
             <View style={styles.cardTags}>
@@ -222,11 +246,11 @@ export default function EventsScreen() {
             <Ionicons
               name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isBookmarked ? '#007AFF' : '#666'}
+              color={isBookmarked ? '#007AFF' : colors.icon}
             />
           </TouchableOpacity>
         </View>
-        <Text style={styles.cardDescription}>{item.description}</Text>
+        <Text style={[styles.cardDescription, { color: colors.icon }]}>{item.description}</Text>
       </View>
     );
   };
@@ -235,15 +259,27 @@ export default function EventsScreen() {
     const isBookmarked = bookmarkedEvents.some(e => e.id === item.id);
     
     return (
-      <View style={[styles.listItem, { borderLeftColor: item.color, borderLeftWidth: 4 }]}>
+      <View style={[styles.listItem, { 
+        backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white',
+        borderLeftColor: item.color, 
+        borderLeftWidth: 4 
+      }]}>
+        <View style={styles.listImage}>
+          <Image
+            source={{ uri: item.image }}
+            style={styles.listImagePlaceholder}
+            onError={(error) => console.log('List image loading error:', error.nativeEvent.error)}
+            onLoad={() => console.log('List image loaded successfully for:', item.title)}
+          />
+        </View>
         <View style={styles.listContent}>
-          <Text style={styles.listTitle}>{item.title}</Text>
-          <Text style={styles.listLocation}>
-            <Ionicons name="location" size={14} color="#666" />
+          <Text style={[styles.listTitle, { color: colors.text }]}>{item.title}</Text>
+          <Text style={[styles.listLocation, { color: colors.icon }]}>
+            <Ionicons name="location" size={14} color={colors.icon} />
             {' '}{item.location}
           </Text>
-          <Text style={styles.listDate}>
-            <Ionicons name="calendar" size={14} color="#666" />
+          <Text style={[styles.listDate, { color: colors.icon }]}>
+            <Ionicons name="calendar" size={14} color={colors.icon} />
             {' '}{item.date} at {item.time}
           </Text>
           <View style={styles.listTags}>
@@ -262,7 +298,7 @@ export default function EventsScreen() {
           <Ionicons
             name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
             size={20}
-            color={isBookmarked ? '#007AFF' : '#666'}
+            color={isBookmarked ? '#007AFF' : colors.icon}
           />
         </TouchableOpacity>
       </View>
@@ -307,12 +343,12 @@ export default function EventsScreen() {
         
         {/* Color Legend */}
         {categoryColors.length > 0 && (
-          <View style={styles.mapLegend}>
-            <Text style={styles.legendTitle}>Event Categories</Text>
+          <View style={[styles.mapLegend, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white' }]}>
+            <Text style={[styles.legendTitle, { color: colors.text }]}>Event Categories</Text>
             {categoryColors.map(({ category, color }) => (
               <View key={category} style={styles.legendItem}>
                 <View style={[styles.legendColor, { backgroundColor: color }]} />
-                <Text style={styles.legendText}>{category}</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>{category}</Text>
               </View>
             ))}
           </View>
@@ -323,95 +359,91 @@ export default function EventsScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="calendar-outline" size={64} color="#ccc" />
-      <Text style={styles.emptyTitle}>No events found</Text>
-      <Text style={styles.emptySubtitle}>
-        Try adjusting your filters or search terms
+      <Ionicons name="calendar-outline" size={64} color={colors.icon} />
+      <Text style={[styles.emptyTitle, { color: colors.icon }]}>No events found</Text>
+      <Text style={[styles.emptySubtitle, { color: colors.icon }]}>
+        Try adjusting your search or filters
       </Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white', borderBottomColor: theme === 'dark' ? '#48484a' : '#f0f0f0' }]}>
         <View style={{ flex: 1 }} />
         <TouchableOpacity
-          style={styles.filterButton}
+          style={styles.headerButton}
           onPress={() => setShowFilters(true)}
         >
-          <Ionicons name="filter" size={20} color="#007AFF" />
+          <Ionicons name="filter" size={20} color={colors.tint} />
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      {/* Search */}
+      <View style={[styles.searchContainer, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white' }]}>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { 
+            backgroundColor: theme === 'dark' ? '#3a3a3c' : '#f8f9fa',
+            color: colors.text,
+            borderColor: theme === 'dark' ? '#48484a' : 'transparent'
+          }]}
           placeholder="Search events..."
+          placeholderTextColor={colors.icon}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
       </View>
 
-      {/* View Mode Toggle */}
-      <View style={styles.viewToggle}>
-        <TouchableOpacity
-          style={[styles.viewButton, viewMode === 'card' && styles.viewButtonActive]}
-          onPress={() => setViewMode('card')}
-        >
-          <Ionicons
-            name="grid"
-            size={20}
-            color={viewMode === 'card' ? 'white' : '#666'}
-          />
-        </TouchableOpacity>
+      {/* View Toggle */}
+      <View style={[styles.viewToggle, { backgroundColor: theme === 'dark' ? '#3a3a3c' : 'white' }]}>
         <TouchableOpacity
           style={[styles.viewButton, viewMode === 'list' && styles.viewButtonActive]}
           onPress={() => setViewMode('list')}
         >
-          <Ionicons
-            name="list"
-            size={20}
-            color={viewMode === 'list' ? 'white' : '#666'}
+          <Ionicons 
+            name="list-outline" 
+            size={20} 
+            color={viewMode === 'list' ? 'white' : colors.icon} 
           />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.viewButton, viewMode === 'map' && styles.viewButtonActive]}
           onPress={() => setViewMode('map')}
         >
-          <Ionicons
-            name="map"
-            size={20}
-            color={viewMode === 'map' ? 'white' : '#666'}
+          <Ionicons 
+            name="map-outline" 
+            size={20} 
+            color={viewMode === 'map' ? 'white' : colors.icon} 
           />
         </TouchableOpacity>
       </View>
 
       {/* Content */}
       {loadingEvents ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text>Loading events...</Text>
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyTitle, { color: colors.icon }]}>Loading events...</Text>
         </View>
-      ) : viewMode === 'map' ? (
-        renderMapView()
-      ) : (
+      ) : filteredEvents.length === 0 ? (
+        renderEmptyState()
+      ) : viewMode === 'list' ? (
         <FlatList
           data={filteredEvents}
-          renderItem={viewMode === 'card' ? renderEventCard : renderEventList}
+          renderItem={renderEventList}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
         />
+      ) : (
+        renderMapView()
       )}
 
-      {/* AI Chat FAB */}
+      {/* FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: '#007AFF' }]}
         onPress={() => setShowAIChat(true)}
       >
-        <Ionicons name="chatbubble-ellipses" size={24} color="white" />
+        <Ionicons name="sparkles" size={24} color="white" />
       </TouchableOpacity>
 
       {/* Filters Modal */}
@@ -546,38 +578,36 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
-  title: {
+  headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
   },
-  filterButton: {
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerButton: {
     padding: 8,
   },
   searchContainer: {
     padding: 16,
-    backgroundColor: 'white',
   },
   searchInput: {
-    backgroundColor: '#f8f9fa',
     padding: 12,
     borderRadius: 8,
     fontSize: 16,
+    borderWidth: 1,
   },
   viewToggle: {
     flexDirection: 'row',
-    backgroundColor: 'white',
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 8,
@@ -596,7 +626,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    backgroundColor: 'white',
     borderRadius: 12,
     marginBottom: 16,
     padding: 16,
@@ -617,8 +646,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
   },
   cardContent: {
     flex: 1,
@@ -626,17 +654,14 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
     marginBottom: 4,
   },
   cardLocation: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 2,
   },
   cardDate: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 8,
   },
   cardTags: {
@@ -657,16 +682,23 @@ const styles = StyleSheet.create({
   },
   cardDescription: {
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
   },
   listItem: {
-    backgroundColor: 'white',
     borderRadius: 8,
     marginBottom: 8,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  listImage: {
+    marginRight: 12,
+  },
+  listImagePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
   },
   listContent: {
     flex: 1,
@@ -674,17 +706,14 @@ const styles = StyleSheet.create({
   listTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1a1a1a',
     marginBottom: 4,
   },
   listLocation: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 2,
   },
   listDate: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 8,
   },
   listTags: {
@@ -709,13 +738,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#999',
     textAlign: 'center',
   },
   fab: {
@@ -725,14 +752,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   modalContainer: {
     flex: 1,
@@ -830,7 +856,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'white',
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
@@ -838,7 +863,6 @@ const styles = StyleSheet.create({
   legendTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
     marginBottom: 16,
   },
   legendItem: {
@@ -854,7 +878,6 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 14,
-    color: '#666',
   },
   dateRangeContainer: {
     flexDirection: 'row',
@@ -879,5 +902,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 8,
+  },
+  filterButton: {
+    padding: 8,
   },
 }); 

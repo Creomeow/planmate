@@ -6,9 +6,11 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../context/auth';
+import { ThemeProvider as AppThemeProvider, useTheme } from '../context/theme';
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
+  const { theme } = useTheme();
 
   if (isLoading) {
     return null; // Show loading screen
@@ -42,7 +44,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <RootLayoutNav />
+        <AppThemeProvider>
+          <RootLayoutNav />
+        </AppThemeProvider>
       </AuthProvider>
       <StatusBar style="auto" />
     </ThemeProvider>

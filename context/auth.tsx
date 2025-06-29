@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('User state set, current user:', user);
       
       // Navigate to main app
-      router.replace('/(tabs)/events');
+      router.replace('/(tabs)');
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(user);
       
       // Navigate to main app
-      router.replace('/(tabs)/events');
+      router.replace('/(tabs)');
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.removeItem('userData');
       setUser(null);
       
-      // Navigate to login
+      // Navigate to login screen
       router.replace('/(auth)/login');
     } catch (error) {
       console.error('Logout error:', error);

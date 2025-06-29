@@ -9,15 +9,20 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { Colors } from '../../constants/Colors';
 import { useAuth } from '../../context/auth';
+import { useTheme } from '../../context/theme';
 import { authService } from '../../services/authService';
 
 export default function AccountScreen() {
   const { user, logout, isLoading } = useAuth();
+  const { theme, themeMode, setThemeMode, toggleTheme } = useTheme();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changing, setChanging] = useState(false);
+
+  const colors = Colors[theme];
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -76,32 +81,90 @@ export default function AccountScreen() {
     );
   };
 
+  const handleThemeModeChange = async (mode: 'light' | 'dark' | 'system') => {
+    await setThemeMode(mode);
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.header}>Account</Text>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+      <Text style={[styles.header, { color: colors.text }]}>Account</Text>
+      
+      {/* Theme Settings */}
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white' }]}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>Appearance</Text>
+        <View style={styles.themeOptions}>
+          <TouchableOpacity
+            style={[
+              styles.themeOption,
+              themeMode === 'light' && styles.themeOptionSelected,
+              { borderColor: themeMode === 'light' ? colors.tint : '#e9ecef' }
+            ]}
+            onPress={() => handleThemeModeChange('light')}
+          >
+            <Ionicons 
+              name="sunny" 
+              size={20} 
+              color={themeMode === 'light' ? colors.tint : colors.icon} 
+            />
+            <Text style={[styles.themeOptionText, { color: colors.text }]}>Light</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.themeOption,
+              themeMode === 'dark' && styles.themeOptionSelected,
+              { borderColor: themeMode === 'dark' ? colors.tint : '#e9ecef' }
+            ]}
+            onPress={() => handleThemeModeChange('dark')}
+          >
+            <Ionicons 
+              name="moon" 
+              size={20} 
+              color={themeMode === 'dark' ? colors.tint : colors.icon} 
+            />
+            <Text style={[styles.themeOptionText, { color: colors.text }]}>Dark</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Change Password */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Change Password</Text>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white' }]}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>Change Password</Text>
         <View style={styles.inputGroup}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { 
+              backgroundColor: theme === 'dark' ? '#3a3a3c' : '#f8f9fa',
+              color: colors.text,
+              borderColor: theme === 'dark' ? '#48484a' : '#e9ecef'
+            }]}
             placeholder="Current Password"
+            placeholderTextColor={colors.icon}
             value={currentPassword}
             onChangeText={setCurrentPassword}
             secureTextEntry
             autoCapitalize="none"
           />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { 
+              backgroundColor: theme === 'dark' ? '#3a3a3c' : '#f8f9fa',
+              color: colors.text,
+              borderColor: theme === 'dark' ? '#48484a' : '#e9ecef'
+            }]}
             placeholder="New Password"
+            placeholderTextColor={colors.icon}
             value={newPassword}
             onChangeText={setNewPassword}
             secureTextEntry
             autoCapitalize="none"
           />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { 
+              backgroundColor: theme === 'dark' ? '#3a3a3c' : '#f8f9fa',
+              color: colors.text,
+              borderColor: theme === 'dark' ? '#48484a' : '#e9ecef'
+            }]}
             placeholder="Confirm New Password"
+            placeholderTextColor={colors.icon}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
@@ -109,7 +172,7 @@ export default function AccountScreen() {
           />
         </View>
         <TouchableOpacity
-          style={[styles.button, changing && styles.buttonDisabled]}
+          style={[styles.button, { backgroundColor: '#007AFF' }, changing && styles.buttonDisabled]}
           onPress={handleChangePassword}
           disabled={changing}
         >
@@ -117,8 +180,9 @@ export default function AccountScreen() {
           <Text style={styles.buttonText}>{changing ? 'Changing...' : 'Change Password'}</Text>
         </TouchableOpacity>
       </View>
+      
       {/* Logout */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white' }]}>
         <TouchableOpacity
           style={[styles.button, isLoading && styles.buttonDisabled, { backgroundColor: '#ff3b30' }]}
           onPress={handleLogout}
@@ -192,5 +256,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
+  },
+  themeOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  themeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderWidth: 2,
+    borderColor: '#e9ecef',
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  themeOptionSelected: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+  },
+  themeOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
 }); 

@@ -16,15 +16,17 @@ import {
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import AIChatModal from '../../components/AIChatModal';
+import CalendarView from '../../components/CalendarView';
 import { Colors } from '../../constants/Colors';
 import { useAuth } from '../../context/auth';
 import { useTheme } from '../../context/theme';
 import { authService } from '../../services/authService';
+import { calendarService } from '../../services/calendarService';
 import { fetchEventbriteEvents } from '../../services/eventsService';
 
 const { width } = Dimensions.get('window');
 
-type ViewMode = 'list' | 'map';
+type ViewMode = 'list' | 'map' | 'calendar';
 
 export default function EventsScreen() {
   const { user, isLoading } = useAuth();
@@ -50,9 +52,11 @@ export default function EventsScreen() {
     endDate: '',
   });
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [calendarInitialized, setCalendarInitialized] = useState(false);
 
   useEffect(() => {
     fetchEvents();
+    initializeCalendar();
     // Clear any old global bookmarks data to ensure clean user-specific bookmarks
     clearOldGlobalBookmarks();
   }, []);
@@ -71,6 +75,20 @@ export default function EventsScreen() {
   useEffect(() => {
     filterEvents();
   }, [events, searchQuery, selectedFilters]);
+
+  const initializeCalendar = async () => {
+    try {
+      if (!user?.id) return;
+      const success = await calendarService.initialize(user.id);
+      setCalendarInitialized(success);
+      if (!success) {
+        console.log('Calendar initialization failed');
+      }
+    } catch (error) {
+      console.error('Error initializing calendar:', error);
+      setCalendarInitialized(false);
+    }
+  };
 
   const fetchEvents = async () => {
     setLoadingEvents(true);
@@ -153,6 +171,55 @@ export default function EventsScreen() {
     } catch (error) {
       console.error('Error toggling bookmark:', error);
       Alert.alert('Error', 'Failed to save bookmark. Please try again.');
+    }
+  };
+
+  const addToCalendar = async (event: any) => {
+    if (!calendarInitialized) {
+      Alert.alert('Calendar Not Available', 'Calendar features are not available. Please try again.');
+      return;
+    }
+
+    // Check for conflicts first
+    try {
+      const conflicts = await calendarService.checkForConflicts(event);
+      
+      if (conflicts.length > 0) {
+        let conflictMessage = 'Potential scheduling conflicts:\n\n';
+        conflicts.forEach(conflict => {
+          const conflictType = conflict.conflictType === 'overlap' ? 'Overlaps with' : 'Adjacent to';
+          const severity = conflict.severity === 'error' ? '⚠️' : 'ℹ️';
+          conflictMessage += `${severity} ${conflictType} another event\n`;
+        });
+        
+        Alert.alert(
+          'Scheduling Conflict',
+          conflictMessage,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add Anyway', onPress: () => addEventToCalendar(event) }
+          ]
+        );
+      } else {
+        await addEventToCalendar(event);
+      }
+    } catch (error) {
+      console.error('Error adding to calendar:', error);
+      Alert.alert('Error', 'Failed to add event to calendar');
+    }
+  };
+
+  const addEventToCalendar = async (event: any): Promise<boolean> => {
+    const result = await calendarService.addEventToCalendar(event);
+    if (result === 'already_added') {
+      Alert.alert('Already Added', 'This event is already in your calendar.');
+      return true; // Return true to indicate no error, just already added
+    } else if (result) {
+      Alert.alert('Success', 'Event added to calendar!');
+      return true;
+    } else {
+      Alert.alert('Error', 'Failed to add event to calendar');
+      return false;
     }
   };
 
@@ -239,16 +306,28 @@ export default function EventsScreen() {
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.bookmarkButton}
-            onPress={() => toggleBookmark(item)}
-          >
-            <Ionicons
-              name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-              size={24}
-              color={isBookmarked ? '#007AFF' : colors.icon}
-            />
-          </TouchableOpacity>
+          <View style={styles.cardActions}>
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={() => addToCalendar(item)}
+            >
+              <Ionicons
+                name={calendarInitialized ? "calendar-outline" : "calendar-outline"}
+                size={20}
+                color={calendarInitialized ? colors.tint : colors.icon}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.bookmarkButton}
+              onPress={() => toggleBookmark(item)}
+            >
+              <Ionicons
+                name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                size={24}
+                color={isBookmarked ? '#007AFF' : colors.icon}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={[styles.cardDescription, { color: colors.icon }]}>{item.description}</Text>
       </View>
@@ -291,16 +370,28 @@ export default function EventsScreen() {
             </View>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.listBookmarkButton}
-          onPress={() => toggleBookmark(item)}
-        >
-          <Ionicons
-            name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-            size={20}
-            color={isBookmarked ? '#007AFF' : colors.icon}
-          />
-        </TouchableOpacity>
+        <View style={styles.listActions}>
+          <TouchableOpacity
+            style={styles.calendarButton}
+            onPress={() => addToCalendar(item)}
+          >
+            <Ionicons
+              name={calendarInitialized ? "calendar-outline" : "calendar-outline"}
+              size={18}
+              color={calendarInitialized ? colors.tint : colors.icon}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.listBookmarkButton}
+            onPress={() => toggleBookmark(item)}
+          >
+            <Ionicons
+              name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={20}
+              color={isBookmarked ? '#007AFF' : colors.icon}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -356,6 +447,25 @@ export default function EventsScreen() {
       </View>
     );
   };
+
+  const renderCalendarView = () => (
+    <CalendarView
+      events={filteredEvents}
+      onEventPress={(event) => {
+        // Show event details and calendar options
+        Alert.alert(
+          event.title,
+          `${event.description}\n\nDate: ${event.date}\nTime: ${event.time}\nLocation: ${event.location}`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add to Calendar', onPress: () => addToCalendar(event) },
+            { text: 'Bookmark', onPress: () => toggleBookmark(event) }
+          ]
+        );
+      }}
+      userId={user?.id}
+    />
+  );
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -417,6 +527,16 @@ export default function EventsScreen() {
             color={viewMode === 'map' ? 'white' : colors.icon} 
           />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewButton, viewMode === 'calendar' && styles.viewButtonActive]}
+          onPress={() => setViewMode('calendar')}
+        >
+          <Ionicons 
+            name="calendar-outline" 
+            size={20} 
+            color={viewMode === 'calendar' ? 'white' : colors.icon} 
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Content */}
@@ -434,8 +554,10 @@ export default function EventsScreen() {
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
         />
-      ) : (
+      ) : viewMode === 'map' ? (
         renderMapView()
+      ) : (
+        renderCalendarView()
       )}
 
       {/* FAB */}
@@ -671,13 +793,24 @@ const styles = StyleSheet.create({
   tag: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 16,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
   tagText: {
     fontSize: 12,
-    fontWeight: '500',
+    color: '#666',
   },
   bookmarkButton: {
+    padding: 4,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  calendarButton: {
     padding: 4,
   },
   cardDescription: {
@@ -718,6 +851,11 @@ const styles = StyleSheet.create({
   },
   listTags: {
     flexDirection: 'row',
+    gap: 8,
+  },
+  listActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   listBookmarkButton: {
@@ -796,9 +934,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
     backgroundColor: '#f8f9fa',
     borderWidth: 1,
     borderColor: '#e9ecef',
@@ -808,7 +946,7 @@ const styles = StyleSheet.create({
     borderColor: '#007AFF',
   },
   chipText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
   },
   chipTextActive: {
@@ -861,23 +999,23 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0',
   },
   legendTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   legendColor: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    marginRight: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    marginRight: 6,
   },
   legendText: {
-    fontSize: 14,
+    fontSize: 12,
   },
   dateRangeContainer: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert,
     ScrollView,
@@ -24,39 +24,45 @@ export default function AccountScreen() {
 
   const colors = Colors[theme];
 
+  // isMounted ref to prevent state updates after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      if (isMounted.current) Alert.alert('Error', 'Please fill in all fields');
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'New passwords do not match');
+      if (isMounted.current) Alert.alert('Error', 'New passwords do not match');
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      if (isMounted.current) Alert.alert('Error', 'Password must be at least 6 characters long');
       return;
     }
     setChanging(true);
     try {
-      // For demo, just check if current password matches any user (since passwords are not stored)
-      // In a real app, you'd verify the password securely
       const storedUser = await authService.loginUser(user?.email || '', currentPassword);
       if (!storedUser) {
-        Alert.alert('Error', 'Current password is incorrect');
-        setChanging(false);
+        if (isMounted.current) Alert.alert('Error', 'Current password is incorrect');
+        if (isMounted.current) setChanging(false);
         return;
       }
-      // Simulate password update by updating user object (not secure, demo only)
       await authService.updateUser(user!.id, { password: newPassword });
-      Alert.alert('Success', 'Password changed successfully');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      if (isMounted.current) Alert.alert('Success', 'Password changed successfully');
+      if (isMounted.current) setCurrentPassword('');
+      if (isMounted.current) setNewPassword('');
+      if (isMounted.current) setConfirmPassword('');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to change password');
+      if (isMounted.current) Alert.alert('Error', error.message || 'Failed to change password');
     } finally {
-      setChanging(false);
+      if (isMounted.current) setChanging(false);
     }
   };
 
@@ -73,7 +79,7 @@ export default function AccountScreen() {
             try {
               await logout();
             } catch (error) {
-              Alert.alert('Error', 'Failed to logout. Please try again.');
+              if (isMounted.current) Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           },
         },

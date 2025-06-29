@@ -84,12 +84,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       setIsLoading(true);
-      
       // Clear only the user session, not the user data
       await AsyncStorage.removeItem('userData');
       setUser(null);
-      
-      // Navigate to login screen
+      // Navigate to login screen using Expo Router path
       router.replace('/(auth)/login');
     } catch (error) {
       console.error('Logout error:', error);

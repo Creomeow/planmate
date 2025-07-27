@@ -53,6 +53,8 @@ export default function EventsScreen() {
   });
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [calendarInitialized, setCalendarInitialized] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchEvents();
@@ -90,20 +92,38 @@ export default function EventsScreen() {
     }
   };
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (page = 1, append = false) => {
     setLoadingEvents(true);
     try {
-      const fetched = await fetchEventbriteEvents();
-      setEvents(fetched);
-      setFilteredEvents(fetched);
+      // Always fetch all events for both list and map view
+      const fetched = await fetchEventbriteEvents({ all: true });
+      console.log(`Fetched ${fetched.length} total events for both list and map view`);
+      
+      if (append) {
+        setEvents(prev => [...prev, ...fetched]);
+        setFilteredEvents(prev => [...prev, ...fetched]);
+      } else {
+        setEvents(fetched);
+        setFilteredEvents(fetched);
+      }
+      
+      // Since we're fetching all events, set totalPages to 1
+      setTotalPages(1);
+      setCurrentPage(1);
     } catch (error) {
       console.error('Error fetching events:', error);
+      Alert.alert(
+        'No Events Available',
+        'Unable to fetch real events at the moment. Please check your internet connection and try again.'
+      );
       setEvents([]);
       setFilteredEvents([]);
     } finally {
       setLoadingEvents(false);
     }
   };
+
+
 
   const loadBookmarkedEvents = async () => {
     if (!user?.id || events.length === 0) {
@@ -182,7 +202,11 @@ export default function EventsScreen() {
 
     // Check for conflicts first
     try {
-      const conflicts = await calendarService.checkForConflicts(event);
+      if (!user?.id) {
+        Alert.alert('Error', 'User not logged in');
+        return;
+      }
+      const conflicts = await calendarService.checkForConflicts(event, user.id);
       
       if (conflicts.length > 0) {
         let conflictMessage = 'Potential scheduling conflicts:\n\n';
@@ -194,23 +218,23 @@ export default function EventsScreen() {
         
         Alert.alert(
           'Scheduling Conflict',
-          conflictMessage,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Add Anyway', onPress: () => addEventToCalendar(event) }
-          ]
+          conflictMessage
         );
       } else {
         await addEventToCalendar(event);
       }
     } catch (error) {
       console.error('Error adding to calendar:', error);
-      Alert.alert('Error', 'Failed to add event to calendar');
+      Alert.alert('Error', 'An error occurred');
     }
   };
 
   const addEventToCalendar = async (event: any): Promise<boolean> => {
-    const result = await calendarService.addEventToCalendar(event);
+    if (!user?.id) {
+      Alert.alert('Error', 'User not logged in');
+      return false;
+    }
+    const result = await calendarService.addEventToCalendar(event, user.id);
     if (result === 'already_added') {
       Alert.alert('Already Added', 'This event is already in your calendar.');
       return true; // Return true to indicate no error, just already added
@@ -218,7 +242,7 @@ export default function EventsScreen() {
       Alert.alert('Success', 'Event added to calendar!');
       return true;
     } else {
-      Alert.alert('Error', 'Failed to add event to calendar');
+      Alert.alert('Error', 'An error occurred');
       return false;
     }
   };
@@ -230,7 +254,6 @@ export default function EventsScreen() {
     if (searchQuery) {
       filtered = filtered.filter(event =>
         event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         event.location.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -291,7 +314,7 @@ export default function EventsScreen() {
             <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
             <Text style={[styles.cardLocation, { color: colors.icon }]}>
               <Ionicons name="location" size={14} color={colors.icon} />
-              {' '}{item.location}
+              {' '}{item.location || 'Unknown Location'}
             </Text>
             <Text style={[styles.cardDate, { color: colors.icon }]}>
               <Ionicons name="calendar" size={14} color={colors.icon} />
@@ -329,7 +352,6 @@ export default function EventsScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        <Text style={[styles.cardDescription, { color: colors.icon }]}>{item.description}</Text>
       </View>
     );
   };
@@ -397,12 +419,20 @@ export default function EventsScreen() {
   };
 
   const renderMapView = () => {
-    // Get unique categories and their colors
-    const uniqueCategories = Array.from(new Set(filteredEvents.map(event => event.category)));
-    const categoryColors = uniqueCategories.map(category => {
-      const event = filteredEvents.find(e => e.category === category);
-      return { category, color: event?.color || '#007AFF' };
-    });
+    // Show ALL events on the map, not just filtered ones
+    const allEventsForMap = events; // Use the same events as the list view
+    
+    console.log(`Map view: Rendering ${allEventsForMap.length} events on map`);
+    console.log('Map view events:', allEventsForMap.map((e: any) => `${e.title} (${e.category}) - ${e.latitude}, ${e.longitude}`));
+    
+    // Define the 5 specified categories and their colors
+    const specifiedCategories = [
+      { category: 'Music', color: '#AF52DE' },
+      { category: 'Food', color: '#FF6B35' },
+      { category: 'Tech', color: '#007AFF' },
+      { category: 'Art', color: '#FF9500' },
+      { category: 'Outdoor', color: '#34C759' }
+    ];
 
     return (
       <View style={styles.mapContainer}>
@@ -415,7 +445,7 @@ export default function EventsScreen() {
             longitudeDelta: 0.0421,
           }}
         >
-          {filteredEvents.map((event) => (
+          {allEventsForMap.map((event) => (
             <Marker
               key={event.id}
               coordinate={{
@@ -433,17 +463,15 @@ export default function EventsScreen() {
         </MapView>
         
         {/* Color Legend */}
-        {categoryColors.length > 0 && (
-          <View style={[styles.mapLegend, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white' }]}>
-            <Text style={[styles.legendTitle, { color: colors.text }]}>Event Categories</Text>
-            {categoryColors.map(({ category, color }) => (
-              <View key={category} style={styles.legendItem}>
-                <View style={[styles.legendColor, { backgroundColor: color }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>{category}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+        <View style={[styles.mapLegend, { backgroundColor: theme === 'dark' ? '#2c2c2e' : 'white' }]}>
+          <Text style={[styles.legendTitle, { color: colors.text }]}>Event Categories</Text>
+          {specifiedCategories.map(({ category, color }) => (
+            <View key={category} style={styles.legendItem}>
+              <View style={[styles.legendColor, { backgroundColor: color }]} />
+              <Text style={[styles.legendText, { color: colors.text }]}>{category}</Text>
+            </View>
+          ))}
+        </View>
       </View>
     );
   };
@@ -455,15 +483,10 @@ export default function EventsScreen() {
         // Show event details and calendar options
         Alert.alert(
           event.title,
-          `${event.description}\n\nDate: ${event.date}\nTime: ${event.time}\nLocation: ${event.location}`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Add to Calendar', onPress: () => addToCalendar(event) },
-            { text: 'Bookmark', onPress: () => toggleBookmark(event) }
-          ]
+          `Date: ${event.date}\nTime: ${event.time}\nLocation: ${event.location}`
         );
       }}
-      userId={user?.id}
+      userId={user?.id || ''}
     />
   );
 
@@ -553,6 +576,7 @@ export default function EventsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+
         />
       ) : viewMode === 'map' ? (
         renderMapView()
@@ -586,7 +610,7 @@ export default function EventsScreen() {
             <View style={styles.filterSection}>
               <Text style={styles.filterLabel}>Category</Text>
               <View style={styles.chipContainer}>
-                {['Technology', 'Music', 'Food', 'Art', 'Outdoor'].map((category) => (
+                {['Tech', 'Music', 'Food', 'Art', 'Outdoor'].map((category) => (
                   <TouchableOpacity
                     key={category}
                     style={[
@@ -612,7 +636,7 @@ export default function EventsScreen() {
             <View style={styles.filterSection}>
               <Text style={styles.filterLabel}>Budget</Text>
               <View style={styles.chipContainer}>
-                {['Low', 'Medium', 'High'].map((budget) => (
+                {['Free', 'Paid'].map((budget) => (
                   <TouchableOpacity
                     key={budget}
                     style={[

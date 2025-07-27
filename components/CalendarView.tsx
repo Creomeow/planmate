@@ -110,6 +110,7 @@ export default function CalendarView({ events, onEventPress, userId }: CalendarV
     const allEvents = dayCalendarEvents.map(event => ({
       title: event.title,
       time: to12Hour(event.startDate),
+      location: event.location || 'No location specified',
     }));
 
     // Remove duplicates (same title and normalized time)
@@ -124,7 +125,7 @@ export default function CalendarView({ events, onEventPress, userId }: CalendarV
 
     let message = `Events on ${date}:\n\n`;
     uniqueEvents.forEach(event => {
-      message += `• ${event.title} at ${event.time}\n`;
+      message += `• ${event.title} at ${event.time}\n  📍 ${event.location}\n\n`;
     });
 
     let buttons: Array<{ text: string; onPress?: () => void }> = [{ text: 'OK' }];

@@ -1,0 +1,25 @@
+{
+  "name": "planmate-backend",
+  "version": "1.0.0",
+  "description": "Backend scraper for PlanMate events app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "events",
+    "scraper",
+    "eventbrite",
+    "singapore"
+  ],
+  "author": "PlanMate",
+  "license": "MIT"
+}

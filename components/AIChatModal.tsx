@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     KeyboardAvoidingView,
     Modal,
@@ -10,9 +11,9 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
-import { openaiService } from '../services/openaiService';
+import { realAIService } from '../services/realAIService';
 
 interface Message {
   id: string;
@@ -30,16 +31,25 @@ interface AIChatModalProps {
 
 export default function AIChatModal({ visible, onClose, events, bookmarkedEvents }: AIChatModalProps) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
+      const [inputText, setInputText] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [apiKey, setApiKey] = useState('AIzaSyD7BssDDN5kORTy4xR5NxxrIY3f512ZXnI');
+    const [selectedProvider, setSelectedProvider] = useState<'openai' | 'anthropic' | 'cohere' | 'gemini'>('gemini');
+    const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    // Configure AI service with Gemini API key
+    realAIService.setAPIKey(apiKey);
+    realAIService.setProvider(selectedProvider);
+  }, [apiKey, selectedProvider]);
 
   useEffect(() => {
     if (visible && messages.length === 0) {
       // Add welcome message
       const welcomeMessage: Message = {
         id: 'welcome',
-        text: `Hi! I'm your AI planning assistant. I can help you plan activities and find events. ${
+        text: `Hi! I'm your AI planning assistant powered by Google Gemini. I can help you plan activities and find events. ${
           bookmarkedEvents.length > 0 
             ? `I see you have ${bookmarkedEvents.length} saved events. I can help you plan what to do first based on your preferences!`
             : "I can suggest events from all available options and help you plan your activities."
@@ -65,11 +75,23 @@ export default function AIChatModal({ visible, onClose, events, bookmarkedEvents
     setInputText('');
     setIsLoading(true);
 
+    // Add loading message
+    const loadingMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      text: '🤔 AI is thinking...',
+      isUser: false,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, loadingMessage]);
+
     try {
-      const response = await openaiService.sendMessage(inputText.trim(), events, bookmarkedEvents);
+      const response = await realAIService.sendMessage(inputText.trim(), events, bookmarkedEvents);
+      
+      // Remove loading message and add real response
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMessage.id));
       
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         text: response,
         isUser: false,
         timestamp: new Date(),
@@ -78,8 +100,12 @@ export default function AIChatModal({ visible, onClose, events, bookmarkedEvents
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      // Remove loading message and add error response
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMessage.id));
+      
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         text: 'Sorry, I encountered an error. Please try again.',
         isUser: false,
         timestamp: new Date(),
@@ -87,6 +113,21 @@ export default function AIChatModal({ visible, onClose, events, bookmarkedEvents
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const configureAI = () => {
+    setShowSettings(true);
+  };
+
+  const saveAPIKey = () => {
+    if (apiKey.trim()) {
+      realAIService.setAPIKey(apiKey.trim());
+      realAIService.setProvider(selectedProvider);
+      setShowSettings(false);
+      Alert.alert('Success', 'AI service configured!');
+    } else {
+      Alert.alert('Error', 'Please enter a valid API key');
     }
   };
 
@@ -132,9 +173,14 @@ export default function AIChatModal({ visible, onClose, events, bookmarkedEvents
               </Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#666" />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity onPress={configureAI} style={styles.settingsButton}>
+              <Ionicons name="settings-outline" size={20} color="#666" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Messages */}
@@ -189,6 +235,74 @@ export default function AIChatModal({ visible, onClose, events, bookmarkedEvents
           </View>
         </KeyboardAvoidingView>
       </View>
+
+      {/* Settings Modal */}
+      <Modal
+        visible={showSettings}
+        animationType="slide"
+        presentationStyle="formSheet"
+      >
+        <View style={styles.settingsContainer}>
+          <View style={styles.settingsHeader}>
+            <Text style={styles.settingsTitle}>Configure AI Service</Text>
+            <TouchableOpacity onPress={() => setShowSettings(false)} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.settingsContent}>
+            <Text style={styles.settingsLabel}>Select AI Provider:</Text>
+            <View style={styles.providerButtons}>
+              {(['openai', 'anthropic', 'cohere', 'gemini'] as const).map((provider) => (
+                <TouchableOpacity
+                  key={provider}
+                  style={[
+                    styles.providerButton,
+                    selectedProvider === provider && styles.providerButtonActive
+                  ]}
+                  onPress={() => setSelectedProvider(provider)}
+                >
+                  <Text style={[
+                    styles.providerButtonText,
+                    selectedProvider === provider && styles.providerButtonTextActive
+                  ]}>
+                    {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.settingsLabel}>API Key:</Text>
+            <TextInput
+              style={styles.apiKeyInput}
+              placeholder="Enter your API key here..."
+              value={apiKey}
+              onChangeText={setApiKey}
+              secureTextEntry
+              multiline
+            />
+
+            <TouchableOpacity
+              style={[styles.saveButton, !apiKey.trim() && styles.saveButtonDisabled]}
+              onPress={saveAPIKey}
+              disabled={!apiKey.trim()}
+            >
+              <Text style={styles.saveButtonText}>Save Configuration</Text>
+            </TouchableOpacity>
+
+            <View style={styles.helpText}>
+              <Text style={styles.helpTitle}>✅ Pre-configured with Google Gemini!</Text>
+              <Text style={styles.helpBody}>
+                Your AI is ready to use with Google Gemini (15 free requests/minute).{'\n\n'}
+                Other free options:{'\n'}
+                • Cohere: dashboard.cohere.ai{'\n'}
+                • Hugging Face: huggingface.co{'\n'}
+                • Replicate: replicate.com
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -236,6 +350,14 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 8,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsButton: {
+    padding: 8,
+    marginRight: 8,
   },
   messagesList: {
     flex: 1,
@@ -336,5 +458,104 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#f0f0f0',
+  },
+  // Settings Modal Styles
+  settingsContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  settingsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  settingsContent: {
+    flex: 1,
+    padding: 16,
+  },
+  settingsLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  providerButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  providerButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  providerButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  providerButtonText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  providerButtonTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  apiKeyInput: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  helpText: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+  },
+  helpTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  helpBody: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
 }); 

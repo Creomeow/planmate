@@ -1,319 +1,181 @@
-// Peatix web scraping service for Singapore events
+// Backend API events service for Singapore events
+
+// Backend API configuration
+const BACKEND_API_BASE = 'http://192.168.18.74:3001/api';
+
+// Category colors mapping for the 5 specified categories
+const CATEGORY_COLORS = {
+  'Music': '#AF52DE',
+  'Food': '#FF6B35',
+  'Tech': '#007AFF',
+  'Art': '#FF9500',
+  'Outdoor': '#34C759',
+};
+
+// Singapore location coordinates
+const LOCATION_COORDS = {
+  'Marina Bay Sands': { lat: 1.2838, lng: 103.8591 },
+  'Clarke Quay': { lat: 1.2897, lng: 103.8501 },
+  'National Gallery Singapore': { lat: 1.2904, lng: 103.8520 },
+  'Gardens by the Bay': { lat: 1.2816, lng: 103.8636 },
+  'East Coast Park': { lat: 1.3028, lng: 103.9123 },
+  'Suntec Singapore': { lat: 1.2931, lng: 103.8520 },
+  'Botanic Gardens': { lat: 1.3151, lng: 103.8162 },
+  'Orchard Road': { lat: 1.3048, lng: 103.8318 },
+  'Sentosa': { lat: 1.2494, lng: 103.8303 },
+  'Chinatown': { lat: 1.2838, lng: 103.8433 },
+  'Little India': { lat: 1.3061, lng: 103.8518 },
+  'Singapore': { lat: 1.3521, lng: 103.8198 }, // Default
+  // Additional venues for the 5 categories
+  'Esplanade Concert Hall': { lat: 1.2897, lng: 103.8551 },
+  'Marina Bay Sands Theatre': { lat: 1.2838, lng: 103.8591 },
+  'Singapore Indoor Stadium': { lat: 1.3028, lng: 103.8736 },
+  'The Substation': { lat: 1.2838, lng: 103.8433 },
+  'Timbre+': { lat: 1.2838, lng: 103.8433 },
+  'Chinatown Food Street': { lat: 1.2838, lng: 103.8433 },
+  'Lau Pa Sat': { lat: 1.2838, lng: 103.8518 },
+  'Maxwell Food Centre': { lat: 1.2838, lng: 103.8433 },
+  'Tiong Bahru Market': { lat: 1.2838, lng: 103.8303 },
+  'Amoy Street Food Centre': { lat: 1.2838, lng: 103.8518 },
+  'Singapore Science Centre': { lat: 1.3321, lng: 103.7347 },
+  'Block 71': { lat: 1.3048, lng: 103.7876 },
+  'JTC LaunchPad': { lat: 1.3048, lng: 103.7876 },
+  'National Design Centre': { lat: 1.2838, lng: 103.8518 },
+  'TechSpace Singapore': { lat: 1.2838, lng: 103.8518 },
+  'ArtScience Museum': { lat: 1.2864, lng: 103.8591 },
+  'Singapore Art Museum': { lat: 1.2904, lng: 103.8520 },
+  'Esplanade Theatres': { lat: 1.2897, lng: 103.8551 },
+  'Asian Civilisations Museum': { lat: 1.2871, lng: 103.8518 },
+  'Singapore Sports Hub': { lat: 1.3028, lng: 103.8736 },
+  'Marina Bay Sands Skypark': { lat: 1.2838, lng: 103.8591 },
+  'MacRitchie Reservoir': { lat: 1.3505, lng: 103.8168 },
+};
+
+// Fetch events from backend API
+async function fetchEventbriteAPIEvents({
+  location = 'Singapore',
+  categories = '',
+  page = 1,
+  pageSize = 20,
+  all = false,
+} = {}) {
+  try {
+    console.log('Fetching real live events from backend API...');
+    
+    // Build API URL with parameters
+    const params = new URLSearchParams({
+      'location': location,
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+    });
+    
+    // Add all parameter if requesting all events
+    if (all) {
+      params.append('all', 'true');
+    }
+    
+    const url = `${BACKEND_API_BASE}/events?${params}`;
+    
+    console.log(`Fetching from backend API: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    console.log(`Backend API response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Backend API error response: ${errorText}`);
+      throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Backend API response: ${data.events?.length || 0} events found`);
+    
+    if (!data.success || !data.events || data.events.length === 0) {
+      throw new Error('No events found from backend API');
+    }
+    
+    console.log(`Successfully fetched ${data.events.length} real events from backend API`);
+    return data.events;
+    
+  } catch (error) {
+    console.error('Error fetching from backend API:', error);
+    throw new Error('Failed to fetch real events from backend. Please check your internet connection and try again.');
+  }
+}
+
+// Helper function to determine category from title
+function determineCategory(title: string): string {
+  const lowerTitle = title.toLowerCase();
+  
+  if (lowerTitle.includes('music') || lowerTitle.includes('concert') || lowerTitle.includes('jazz') || lowerTitle.includes('band') || lowerTitle.includes('dance')) {
+    return 'Music';
+  }
+  if (lowerTitle.includes('food') || lowerTitle.includes('dining') || lowerTitle.includes('restaurant') || lowerTitle.includes('festival')) {
+    return 'Food';
+  }
+  if (lowerTitle.includes('tech') || lowerTitle.includes('technology') || lowerTitle.includes('startup') || lowerTitle.includes('coding')) {
+    return 'Technology';
+  }
+  if (lowerTitle.includes('art') || lowerTitle.includes('exhibition') || lowerTitle.includes('gallery') || lowerTitle.includes('museum')) {
+    return 'Art';
+  }
+  if (lowerTitle.includes('business') || lowerTitle.includes('networking') || lowerTitle.includes('conference') || lowerTitle.includes('workshop')) {
+    return 'Business';
+  }
+  if (lowerTitle.includes('yoga') || lowerTitle.includes('fitness') || lowerTitle.includes('health') || lowerTitle.includes('wellness')) {
+    return 'Health';
+  }
+  if (lowerTitle.includes('film') || lowerTitle.includes('movie') || lowerTitle.includes('cinema') || lowerTitle.includes('theatre')) {
+    return 'Film';
+  }
+  if (lowerTitle.includes('charity') || lowerTitle.includes('fundraiser') || lowerTitle.includes('donation')) {
+    return 'Charity';
+  }
+  if (lowerTitle.includes('sport') || lowerTitle.includes('fitness') || lowerTitle.includes('run') || lowerTitle.includes('marathon')) {
+    return 'Sports';
+  }
+  if (lowerTitle.includes('comedy') || lowerTitle.includes('standup')) {
+    return 'Comedy';
+  }
+  if (lowerTitle.includes('education') || lowerTitle.includes('course') || lowerTitle.includes('training')) {
+    return 'Education';
+  }
+  
+  return 'Other';
+}
+
+// Helper function to get coordinates for location
+function getLocationCoordinates(location: string): { lat: number; lng: number } {
+  const lowerLocation = location.toLowerCase();
+  
+  for (const [key, coords] of Object.entries(LOCATION_COORDS)) {
+    if (lowerLocation.includes(key.toLowerCase())) {
+      return coords;
+    }
+  }
+  
+  return LOCATION_COORDS['Singapore'];
+}
+
 export async function fetchEventbriteEvents({
   location = 'Singapore',
   categories = '',
   page = 1,
   pageSize = 20,
+  all = false,
 } = {}) {
-  try {
-    console.log('Fetching events from Peatix for Singapore...');
-    
-    // Simulate fetching events from Peatix
-    // In a real implementation, this would use a web scraping library
-    const mockPeatixEvents = [
-      {
-        id: '1',
-        title: 'Tech Conference 2025',
-        date: '2025-07-15',
-        time: '09:00',
-        location: 'Marina Bay Sands, Singapore',
-        description: 'Join us for the biggest tech conference in Singapore featuring industry leaders and innovative startups.',
-        category: 'Technology',
-        budget: 'High',
-        image: 'https://picsum.photos/300/200?random=1',
-        latitude: 1.2838,
-        longitude: 103.8591,
-        color: '#007AFF',
-      },
-      {
-        id: '2',
-        title: 'Food & Wine Festival',
-        date: '2025-07-15',
-        time: '09:00',
-        location: 'Gardens by the Bay, Singapore',
-        description: 'Experience the finest cuisines and wines from around the world in this spectacular festival.',
-        category: 'Food & Drink',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=2',
-        latitude: 1.2819,
-        longitude: 103.8636,
-        color: '#FF6B35',
-      },
-      {
-        id: '3',
-        title: 'Startup Networking Night',
-        date: '2025-07-25',
-        time: '19:00',
-        location: 'WeWork, Raffles Place, Singapore',
-        description: 'Connect with fellow entrepreneurs and investors in Singapore\'s vibrant startup ecosystem.',
-        category: 'Business',
-        budget: 'Low',
-        image: 'https://picsum.photos/300/200?random=3',
-        latitude: 1.2841,
-        longitude: 103.8515,
-        color: '#34C759',
-      },
-      {
-        id: '4',
-        title: 'Jazz in the Park',
-        date: '2025-07-30',
-        time: '20:00',
-        location: 'Botanic Gardens, Singapore',
-        description: 'Enjoy an evening of smooth jazz music under the stars in Singapore\'s beautiful Botanic Gardens.',
-        category: 'Music',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=4',
-        latitude: 1.3151,
-        longitude: 103.8162,
-        color: '#AF52DE',
-      },
-      {
-        id: '5',
-        title: 'Art Exhibition Opening',
-        date: '2025-08-05',
-        time: '18:30',
-        location: 'National Gallery Singapore',
-        description: 'Be among the first to view this groundbreaking contemporary art exhibition featuring local and international artists.',
-        category: 'Arts',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=5',
-        latitude: 1.2905,
-        longitude: 103.8520,
-        color: '#FF9500',
-      },
-      {
-        id: '6',
-        title: 'Fitness Bootcamp',
-        date: '2025-08-10',
-        time: '07:00',
-        location: 'East Coast Park, Singapore',
-        description: 'Start your day with an intense fitness bootcamp by the beach. All fitness levels welcome!',
-        category: 'Sports',
-        budget: 'Low',
-        image: 'https://picsum.photos/300/200?random=6',
-        latitude: 1.3028,
-        longitude: 103.9123,
-        color: '#FF3B30',
-      },
-      {
-        id: '7',
-        title: 'Coding Workshop',
-        date: '2025-08-15',
-        time: '14:00',
-        location: 'General Assembly, Singapore',
-        description: 'Learn the fundamentals of web development in this hands-on coding workshop for beginners.',
-        category: 'Education',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=7',
-        latitude: 1.2841,
-        longitude: 103.8515,
-        color: '#5856D6',
-      },
-      {
-        id: '8',
-        title: 'Craft Beer Tasting',
-        date: '2025-08-20',
-        time: '19:30',
-        location: 'Brewerkz, Clarke Quay, Singapore',
-        description: 'Sample the finest craft beers from Singapore and around the world in this exclusive tasting event.',
-        category: 'Food & Drink',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=8',
-        latitude: 1.2905,
-        longitude: 103.8460,
-        color: '#8E8E93',
-      },
-      // 12 more events
-      {
-        id: '9',
-        title: 'Marathon 2025',
-        date: '2025-08-22',
-        time: '06:00',
-        location: 'Singapore Sports Hub',
-        description: 'Join the annual marathon and run with thousands across the city.',
-        category: 'Sports',
-        budget: 'Low',
-        image: 'https://picsum.photos/300/200?random=9',
-        latitude: 1.3048,
-        longitude: 103.8747,
-        color: '#FF9500',
-      },
-      {
-        id: '10',
-        title: 'Startup Pitch Night',
-        date: '2025-08-25',
-        time: '18:00',
-        location: 'Block71, Ayer Rajah',
-        description: 'Watch startups pitch their ideas to investors.',
-        category: 'Business',
-        budget: 'Free',
-        image: 'https://picsum.photos/300/200?random=10',
-        latitude: 1.2992,
-        longitude: 103.7876,
-        color: '#007AFF',
-      },
-      {
-        id: '11',
-        title: 'Vegan Food Fair',
-        date: '2025-08-28',
-        time: '12:00',
-        location: 'Suntec City',
-        description: 'Taste the best vegan food from local and international chefs.',
-        category: 'Food & Drink',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=11',
-        latitude: 1.2931,
-        longitude: 103.8572,
-        color: '#34C759',
-      },
-      {
-        id: '12',
-        title: 'Book Launch: Singapore Stories',
-        date: '2025-09-01',
-        time: '17:00',
-        location: 'Kinokuniya, Orchard',
-        description: 'Meet the authors and get your book signed.',
-        category: 'Arts',
-        budget: 'Low',
-        image: 'https://picsum.photos/300/200?random=12',
-        latitude: 1.3040,
-        longitude: 103.8318,
-        color: '#AF52DE',
-      },
-      {
-        id: '13',
-        title: 'Yoga in the Park',
-        date: '2025-09-05',
-        time: '08:00',
-        location: 'Fort Canning Park',
-        description: 'Start your morning with a relaxing yoga session.',
-        category: 'Health',
-        budget: 'Low',
-        image: 'https://picsum.photos/300/200?random=13',
-        latitude: 1.2976,
-        longitude: 103.8452,
-        color: '#FF3B30',
-      },
-      {
-        id: '14',
-        title: 'Film Festival Opening',
-        date: '2025-09-10',
-        time: '19:00',
-        location: 'The Projector',
-        description: 'Watch the best indie films from around the world.',
-        category: 'Film',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=14',
-        latitude: 1.2996,
-        longitude: 103.8584,
-        color: '#5856D6',
-      },
-      {
-        id: '15',
-        title: 'Charity Gala Dinner',
-        date: '2025-09-15',
-        time: '20:00',
-        location: 'Raffles Hotel',
-        description: 'Support a good cause at this black-tie event.',
-        category: 'Charity',
-        budget: 'High',
-        image: 'https://picsum.photos/300/200?random=15',
-        latitude: 1.2941,
-        longitude: 103.8526,
-        color: '#FF9500',
-      },
-      {
-        id: '16',
-        title: 'Makers Market',
-        date: '2025-09-20',
-        time: '10:00',
-        location: 'Esplanade',
-        description: 'Shop for handmade crafts and goods.',
-        category: 'Market',
-        budget: 'Free',
-        image: 'https://picsum.photos/300/200?random=16',
-        latitude: 1.2894,
-        longitude: 103.8554,
-        color: '#34C759',
-      },
-      {
-        id: '17',
-        title: 'Photography Walk',
-        date: '2025-09-25',
-        time: '16:00',
-        location: 'Chinatown',
-        description: 'Capture the sights of Chinatown with a pro photographer.',
-        category: 'Photography',
-        budget: 'Low',
-        image: 'https://picsum.photos/300/200?random=17',
-        latitude: 1.2842,
-        longitude: 103.8436,
-        color: '#007AFF',
-      },
-      {
-        id: '18',
-        title: 'Street Art Tour',
-        date: '2025-09-28',
-        time: '15:00',
-        location: 'Little India',
-        description: 'Explore the vibrant street art of Little India.',
-        category: 'Art',
-        budget: 'Free',
-        image: 'https://picsum.photos/300/200?random=18',
-        latitude: 1.3066,
-        longitude: 103.8496,
-        color: '#AF52DE',
-      },
-      {
-        id: '19',
-        title: 'Classical Music Night',
-        date: '2025-10-01',
-        time: '19:30',
-        location: 'Victoria Concert Hall',
-        description: 'Enjoy an evening of classical music.',
-        category: 'Music',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=19',
-        latitude: 1.2899,
-        longitude: 103.8517,
-        color: '#FF6B35',
-      },
-      {
-        id: '20',
-        title: 'Halloween Costume Party',
-        date: '2025-10-31',
-        time: '21:00',
-        location: 'Clarke Quay',
-        description: 'Dress up and party all night for Halloween!',
-        category: 'Party',
-        budget: 'Medium',
-        image: 'https://picsum.photos/300/200?random=20',
-        latitude: 1.2906,
-        longitude: 103.8462,
-        color: '#FF3B30',
-      },
-    ];
-
-    // Filter events based on search criteria
-    let filteredEvents = mockPeatixEvents;
-    
-    if (categories) {
-      filteredEvents = filteredEvents.filter(event => 
-        event.category.toLowerCase().includes(categories.toLowerCase())
-      );
-    }
-
-    // Simulate pagination
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedEvents = filteredEvents.slice(startIndex, endIndex);
-
-    console.log(`Found ${paginatedEvents.length} events from Peatix`);
-    
-    return paginatedEvents;
-    
-  } catch (error) {
-    console.error('Error fetching events from Peatix:', error);
-    throw new Error('Failed to fetch events from Peatix: ' + (error instanceof Error ? error.message : String(error)));
-  }
+  return await fetchEventbriteAPIEvents({
+    location,
+    categories,
+    page,
+    pageSize,
+    all,
+  });
 } 

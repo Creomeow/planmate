@@ -1,9 +1,16 @@
-<<<<<<< HEAD
-# Orbital
-=======
-# Welcome to your Expo app 👋
+# PlanMate - Event Discovery & Planning App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+PlanMate is a comprehensive event discovery and planning application built with Expo and React Native. It helps users discover events in Singapore, bookmark their favorites, and integrate them with their calendar.
+
+## Features
+
+- **Event Discovery**: Browse events from multiple sources including Peatix and Eventbrite
+- **Multiple View Modes**: List, Map, and Calendar views for different ways to explore events
+- **Smart Filtering**: Filter events by category, budget, date range, and search terms
+- **Bookmarking**: Save events for later reference
+- **Calendar Integration**: Add events directly to your device calendar
+- **AI Assistant**: Get personalized event recommendations and planning help
+- **Dark/Light Theme**: Full theme support for better user experience
 
 ## Get started
 
@@ -26,17 +33,17 @@ In the output, you'll find options to open the app in a
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Event Sources
 
-## Get a fresh project
+The app uses advanced web scraping to fetch real live events from multiple Singapore sources:
+- **SISTIC**: Official Singapore ticketing platform
+- **TheSmartLocal**: Local events and activities
+- **TimeOut Singapore**: International events guide
+- **Eventbrite Singapore**: Global event platform
+- **Peatix Singapore**: Japanese event platform
+- **RSS Feeds**: Additional event feeds from various sources
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+The app uses multiple proxy services to bypass CORS restrictions and ensure reliable data fetching. No mock data is used - only real live events are displayed.
 
 ## Learn more
 
@@ -51,4 +58,3 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
->>>>>>> 3e387fc (Initial commit)
